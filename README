@@ -1,4 +1,4 @@
-COMP30023 2024 - Project 1
+COMP30023 2024 - Project 1 - Randra Pardewo 1311482 - Hadi Nuno Handrison (Student Number)
 
 ./allocate -f cases/task1/spec.txt -q 1 -m infinite | diff - cases/task1/spec-q1.out
 ./allocate -f cases/task1/two-processes.txt -q 1 -m infinite | diff - cases/task1/two-processes-q1.out
