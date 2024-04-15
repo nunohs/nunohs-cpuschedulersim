@@ -69,8 +69,9 @@ void allocate(Process* processes, int processCount, int quantum, char memoryStra
 void readInput(int argc, char* argv[], char filename[], char memoryStrategy[], int* quantum);
 Process* readProcesses(char filename[], int* processCount);
 int* AllocateMemoryBlock();
+void checkProcesses(ProcessQueue* processQ, Process* processes, int processCount, int time, int* remaining);
 
-void firstFitRR(ProcessQueue* processQ, Process* processes, int processCount, int quantum);
+void firstFitRR(ProcessQueue* processQ, int* memory, Process* processes, int processCount, int quantum);
 void infinite_round_robin(Process* process_queue, int processcount, int quantum);
 void printing_proc_output(int time, int state, char *name, int rtime, int proc_available);
 
@@ -111,14 +112,15 @@ void allocate(Process* processes, int processCount, int quantum, char memoryStra
 
 /* Round-Robin Scheduling with First-Fit Memory Allocation
 */
-void firstFitRR(ProcessQueue* processQ, Process* processes, int processCount, int quantum) {
+void firstFitRR(ProcessQueue* processQ, int* memory, Process* processes, int processCount, int quantum) {
     int time, finished, remaining = 0;
     
+    /* loop will run until all processes are FINISHED*/
     while (finished < processCount) {
-        /* check if any new processes are added to the queue */
-        addProcess(processQ, processes, processCount, time, remaining);
+        /* check if any new processes need to added to the queue */
+        checkProcesses(processQ, processes, processCount, time, &remaining);
         
-        /* before running process, allocate memory block */
+        /* before running a process in CPU, check memory allocation */
         
     }
 }
@@ -180,20 +182,26 @@ int* AllocateMemoryBlock() {
     return memory;
 }
 
-void addProcess(ProcessQueue* processQ, Process* processes, int processCount, int time, int remaining){
-    /* first, check if any processes are ready to enque based on arrival time */
+/* Check for READY processes according to arrival time and enque if needed
+*/
+void checkProcesses(ProcessQueue* processQ, Process* processes, int processCount, int time, int* remaining) {
+
+    /* check if any processes are ready to enque based on arrival time */
     for (int i = 0; i < processCount; i++) {
         if (processes[i].arrivalTime == time) {
             /* enque process, which will stay in queue until FINISHED */
             enqueue(processQ, processes[i]);
-            remaining++;
+            (*remaining)++;
             }
     }
-    /* if there is already a process in the CPU, send it to the back of the queue */
+    /* Move this to update()
+    if there is already a process in the CPU, send it to the back of the queue
     if (processQ->head != NULL) {
-        Process sendBack = dequeue(processQ);
-        enqueue(processQ, sendBack);
-        }
+        Process curProcess = dequeue(processQ);
+        curProcess.state = READY;
+        enqueue(processQ, curProcess);
+    }
+    */
 }
 
 void printing_proc_output(int time, int state, char *name, int rtime, int proc_available){
@@ -204,7 +212,7 @@ void printing_proc_output(int time, int state, char *name, int rtime, int proc_a
     }
 }
 
-// HELPER FUNCTIONS
+// Basic pre-task HELPER FUNCTIONS
 /* read command line arguments to deterimine:
     list of processes, memory strategy, & quantum length
 */
