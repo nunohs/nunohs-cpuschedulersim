@@ -69,17 +69,18 @@ void allocate(Process* processes, int processCount, int quantum, char memoryStra
 void readInput(int argc, char* argv[], char filename[], char memoryStrategy[], int* quantum);
 Process* readProcesses(char filename[], int* processCount);
 int* AllocateMemoryBlock();
-void checkProcesses(ProcessQueue* processQ, Process* processes, int processCount, int time, int* remaining);
+int checkProcesses(ProcessQueue* processQ, Process* processes, int processCount, int time, int* remaining);
+void addProcesses(ProcessQueue* processQ, Process process, int processCount, int time);
 
 void firstFitRR(ProcessQueue* processQ, int* memory, Process* processes, int processCount, int quantum);
-void infinite_round_robin(Process* process_queue, int processcount, int quantum);
+void infinite_round_robin(ProcessQueue* process_queue, Process* process, int processcount, int quantum);
 void printing_proc_output(int time, int state, char *name, int rtime, int proc_available);
 
 /*******************************************************************************************************/
 int main(int argc, char* argv[]) {
     char filename[MAX_FILENAME_STRATEGY_LEN], memoryStrategy[MAX_FILENAME_STRATEGY_LEN];
     int quantum;
-
+    
     /* read command line arguments for simulation specifications */
     readInput(argc, argv, filename, memoryStrategy, &quantum);
 
@@ -102,7 +103,7 @@ void allocate(Process* processes, int processCount, int quantum, char memoryStra
     
     /* Task 1: Round robin with Infinite Memory */
     if(strcmp(INFINITE_MEMORY, memoryStrategy)== 0){
-        infinite_round_robin(processes, processCount, quantum);
+        infinite_round_robin(processQueue, processes, processCount, quantum);
     }
     else if (strcmp(memoryStrategy, FIRST_FIT)) {
         int* memory = AllocateMemoryBlock();
@@ -125,26 +126,75 @@ void firstFitRR(ProcessQueue* processQ, int* memory, Process* processes, int pro
     }
 }
 
-void infinite_round_robin(Process* process_queue, int processcount, int quantum){
+void infinite_round_robin(ProcessQueue* process_queue, Process* process, int processCount, int quantum){
 
 /*DELETE: NOTES FOR OURSELVES. Assume queue is in order of arrival time.
 */
-
+    
     int curr_time;
     int total_finished_processes = 0;
-    int current_proc_available = 0;
+    int proc_inqueue = 0;
     int using_CPU = 0; // Checks whether a processor is currently using CPU
 
 // NOTE: This loop assumes processes finishes only at the end of the quantum which is in the specs
-    for(curr_time = 0; total_finished_processes <= processcount;){
-        for(int i=0; i<processcount; i++){
+    for(curr_time = 0; total_finished_processes < processCount;){
+        for(int i=0; i<processCount; i++){
+            // Process runs for the first time.
+            if(process[i].arrivalTime == curr_time || (process[i].arrivalTime >= curr_time && process[i].arrivalTime < (curr_time-quantum)) ){
+                addProcesses(process_queue,process[i],processCount,curr_time);
+                proc_inqueue++;
+                printing_proc_output(curr_time,process[i].state,process[i].processName,process[i].serviceTime,proc_inqueue);
+                
+                curr_time += quantum;
+                process[i].serviceTime -= quantum;
+                //printf("%d",process[i].serviceTime);
+            }
 
+          /*  else if(process[i].serviceTime <= 0 && process[i].state != FINISHED){
+                printf("Hello");
+                process[i].state = FINISHED;
+                proc_inqueue--;
+                total_finished_processes++; 
+                printing_proc_output(curr_time,process[i].state,process[i].processName,process[i].serviceTime,proc_inqueue);
+            }
+        */
+            
+        }
+        // Allows the process in the queue to use the CPU
+        if(proc_inqueue > 0){
+            //printf("%d\n",curr_time);
+           // printf("%d\n",proc_inqueue);
+            Process process_head = dequeue(process_queue);
+            process_head.serviceTime -= quantum;
+    
+            if(process_head.serviceTime <= 0 && process_head.state != FINISHED){
+                process_head.state = FINISHED;
+                proc_inqueue--;
+                //printf("%d\n",proc_inqueue);
+                total_finished_processes++; 
+                printing_proc_output(curr_time,process_head.state,process_head.processName,process_head.serviceTime,proc_inqueue);
+            
+            }else{
+                enqueue(process_queue,process_head);
+                //printf("%s", process_head.processName);
+            }
+            //process_head.serviceTime -= quantum;
+            curr_time += quantum;
+
+        }else{
+            curr_time++;
+        }
+
+        // Checks if process in queue is finished
+
+
+    /*
             // Process runs for the first time.
             if(process_queue[i].arrivalTime == curr_time || (process_queue[i].arrivalTime >= curr_time && process_queue[i].arrivalTime < (curr_time-quantum)) ){
                 
                 process_queue[i].state = RUNNING;
-                current_proc_available++;
-                printing_proc_output(curr_time,process_queue[i].state,process_queue[i].processName,process_queue[i].remainingTime,current_proc_available); 
+                proc_inqueue++;
+                printing_proc_output(curr_time,process_queue[i].state,process_queue[i].processName,process_queue[i].remainingTime,proc_inqueue); 
         
                 curr_time += quantum;
                 process_queue[i].remainingTime -= quantum;
@@ -153,17 +203,17 @@ void infinite_round_robin(Process* process_queue, int processcount, int quantum)
             else if(process_queue[i].arrivalTime < curr_time && process_queue[i].state == RUNNING){
                     curr_time += quantum;
                     process_queue[i].remainingTime -= quantum;
-                    printing_proc_output(curr_time,process_queue[i].state,process_queue[i].processName,process_queue[i].remainingTime,current_proc_available); 
+                    printing_proc_output(curr_time,process_queue[i].state,process_queue[i].processName,process_queue[i].remainingTime,proc_inqueue); 
             }
             if(process_queue[i].remainingTime <= 0 && process_queue[i].state != FINISHED){
                 process_queue[i].state = FINISHED;
-                current_proc_available--;
+                proc_inqueue--;
                 total_finished_processes++; 
-                printing_proc_output(curr_time,process_queue[i].state,process_queue[i].processName,process_queue[i].remainingTime,current_proc_available);
+                printing_proc_output(curr_time,process_queue[i].state,process_queue[i].processName,process_queue[i].remainingTime,proc_inqueue);
                 
             }
-            
-        }
+    */
+        
         
     }
     //Note: Once a processor is finished, decrement total_ready_processes
@@ -182,14 +232,34 @@ int* AllocateMemoryBlock() {
     return memory;
 }
 
+/* Adds process to the end of the queue */
+void addProcesses(ProcessQueue* processQ, Process process, int processCount, int time){
+     // If there is already a process in the CPU, send it to the back of the queue
+
+  /* if(processQ->head != NULL){
+       Process curProcess = dequeue(processQ);
+        curProcess.state = READY;
+        enqueue(processQ, curProcess);
+    } else if (processQ->head == NULL){
+    
+        enqueue(processQ, process);
+       
+        
+        } */
+     enqueue(processQ,process);
+     process.state = RUNNING;   
+                
+}
+
+
 /* Check for READY processes according to arrival time and enque if needed
 */
-void checkProcesses(ProcessQueue* processQ, Process* processes, int processCount, int time, int* remaining) {
+int checkProcesses(ProcessQueue* processQ, Process* processes, int processCount, int time, int* remaining) {
 
     /* check if any processes are ready to enque based on arrival time */
     for (int i = 0; i < processCount; i++) {
         if (processes[i].arrivalTime == time) {
-            /* enque process, which will stay in queue until FINISHED */
+            
             enqueue(processQ, processes[i]);
             (*remaining)++;
             }
@@ -298,7 +368,7 @@ ProcessQueue* createQueue() {
 */
 void enqueue(ProcessQueue* processQueue, Process process) {
     ProcessNode* temp = newProcessNode(process);
-    if (processQueue->tail = NULL) {
+    if (processQueue->tail == NULL) {
         processQueue->head = processQueue->tail = temp;
         return;
     }
