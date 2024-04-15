@@ -115,19 +115,8 @@ void firstFitRR(ProcessQueue* processQ, Process* processes, int processCount, in
     int time, finished, remaining = 0;
     
     while (finished < processCount) {
-        /* first, check if any processes are ready to enque based on arrival time */
-        for (int i = 0; i < processCount; i++) {
-            if (processes[i].arrivalTime == time) {
-                /* enque process, which will stay in queue until FINISHED */
-                enqueue(processQ, processes[i]);
-                remaining++;
-            }
-        }
-        /* if there is already a process in the CPU, send it to the back of the queue */
-        if (processQ->head != NULL) {
-            Process sendBack = dequeue(processQ);
-            enqueue(processQ, sendBack);
-        }
+        /* check if any new processes are added to the queue */
+        addProcess(processQ, processes, processCount, time, remaining);
         
         /* before running process, allocate memory block */
         
@@ -178,6 +167,34 @@ void infinite_round_robin(Process* process_queue, int processcount, int quantum)
     //Note: Once a processor is finished, decrement total_ready_processes
         
 } 
+/* Allocation of a contiguous memory block;
+    memory is treated as an integer array of size 2048 KB and each element is 1KB of memory,
+    where 0 indicates a free spot and 1 indicates an allocated space
+*/
+int* AllocateMemoryBlock() {
+    int* memory = (int*) calloc(MEMORY_CAPACITY, sizeof(int));
+    if (memory == NULL) {
+        fprintf(stderr, "Failed to allocate memory block\n");
+        exit(EXIT_FAILURE);
+    }
+    return memory;
+}
+
+void addProcess(ProcessQueue* processQ, Process* processes, int processCount, int time, int remaining){
+    /* first, check if any processes are ready to enque based on arrival time */
+    for (int i = 0; i < processCount; i++) {
+        if (processes[i].arrivalTime == time) {
+            /* enque process, which will stay in queue until FINISHED */
+            enqueue(processQ, processes[i]);
+            remaining++;
+            }
+    }
+    /* if there is already a process in the CPU, send it to the back of the queue */
+    if (processQ->head != NULL) {
+        Process sendBack = dequeue(processQ);
+        enqueue(processQ, sendBack);
+        }
+}
 
 void printing_proc_output(int time, int state, char *name, int rtime, int proc_available){
     if(state == FINISHED){
@@ -295,17 +312,4 @@ Process dequeue(ProcessQueue* processQueue) {
     }
     free(temp);
     return process;
-}
-
-/* Allocation of a contiguous memory block;
-    memory is treated as an integer array of size 2048 KB and each element is 1KB of memory,
-    where 0 indicates a free spot and 1 indicates an allocated space
-*/
-int* AllocateMemoryBlock() {
-    int* memory = (int*) calloc(MEMORY_CAPACITY, sizeof(int));
-    if (memory == NULL) {
-        fprintf(stderr, "Failed to allocate memory block\n");
-        exit(EXIT_FAILURE);
-    }
-    return memory;
 }
