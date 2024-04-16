@@ -135,7 +135,7 @@ void calculateStatistics(Process* processes, int processCount){
         
         // Turnaround Time
         total_time_turnaround += processes[i].completionTime - processes[i].arrivalTime;
-        printf("%d\n",processes[i].completionTime - processes[i].arrivalTime);
+        
 
         // Time Overhead
         double time_overhead = (double)(processes[i].completionTime - processes[i].arrivalTime)/processes[i].serviceTime;
@@ -155,7 +155,7 @@ void calculateStatistics(Process* processes, int processCount){
     avg_time_turnaround = ceil((double)total_time_turnaround/processCount);
     avg_time_overhead = total_time_overhead/processCount;
 
-    printf("Turnaround Time %d\n",avg_time_turnaround);
+    printf("Turnaround time %d\n",avg_time_turnaround);
     printf("Time overhead %.2f %.2f\n", max_time_overhead,avg_time_overhead );
     printf("Makespan %d", makespan);
 }
