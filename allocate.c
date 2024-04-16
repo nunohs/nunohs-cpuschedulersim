@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <math.h>
 /*******************************************************************************************************/
 // List of Constants
 
@@ -48,6 +48,7 @@ typedef struct {
     int state;
     int cpuTimeUsed;
     int FFmemoryAllocation;
+    int completionTime;
 } Process;
 
 /* Process Node
@@ -78,6 +79,7 @@ Process* readProcesses(char filename[], int* processCount);
 int* CreateMemoryBlock();
 void checkProcesses(ProcessQueue* processQ, Process* processes, int processCount, int time, int* remaining, int quantum);
 int update(Process* CPUproc, int quantum, int* time, int* finished, int remaining);
+void calculateStatistics(Process* processes, int processCount);
 
 void firstFitRR(ProcessQueue* processQ, int* memory, Process* processes, int processCount, int quantum);
 void infiniteRR(ProcessQueue* processQ, Process* processes, int processCount, int quantum);
@@ -121,6 +123,41 @@ void allocate(Process* processes, int processCount, int quantum, char memoryStra
         int* memory = CreateMemoryBlock();
         firstFitRR(processQueue, memory, processes, processCount, quantum);
     }  
+    calculateStatistics(processes,processCount);
+}
+  
+
+void calculateStatistics(Process* processes, int processCount){
+    int total_time_turnaround = 0, avg_time_turnaround = 0;
+    double total_time_overhead = 0, max_time_overhead = 0, avg_time_overhead;
+    int makespan = 0;
+    for(int i = 0; i<processCount; i++){
+        
+        // Turnaround Time
+        total_time_turnaround += processes[i].completionTime - processes[i].arrivalTime;
+        printf("%d\n",processes[i].completionTime - processes[i].arrivalTime);
+
+        // Time Overhead
+        double time_overhead = (double)(processes[i].completionTime - processes[i].arrivalTime)/processes[i].serviceTime;
+        total_time_overhead += time_overhead;
+        if(max_time_overhead<time_overhead){
+            max_time_overhead = time_overhead;
+        }
+
+        //Makespan
+        if(i == processCount-1){
+            makespan = processes[i].completionTime;
+        }
+        
+    }
+
+    max_time_overhead = max_time_overhead;
+    avg_time_turnaround = ceil((double)total_time_turnaround/processCount);
+    avg_time_overhead = total_time_overhead/processCount;
+
+    printf("Turnaround Time %d\n",avg_time_turnaround);
+    printf("Time overhead %.2f %.2f\n", max_time_overhead,avg_time_overhead );
+    printf("Makespan %d", makespan);
 }
 
 /* Round-Robin Scheduling with First-Fit Memory Allocation
@@ -256,6 +293,8 @@ void infiniteRR(ProcessQueue* processQ, Process* processes, int processCount, in
             if (sendBack->state == FINISHED) {
                 remaining--;
                 printf("%d,FINISHED,process-name=%s,proc-remaining=%d\n", time, sendBack->processName, remaining);
+                sendBack->completionTime = time;
+            
                 /* continue as idlle if no other processes are queued*/
                 if (remaining == 0) {
                     break;
@@ -394,6 +433,7 @@ Process* readProcesses(char filename[], int* processCount) {
         processes[*processCount].state = READY;
         processes[*processCount].cpuTimeUsed = READY;
         processes[*processCount].FFmemoryAllocation = NOT_ALLOCATED;
+        processes[*processCount].completionTime = 0;
         (*processCount)++;
     }
 
