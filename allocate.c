@@ -76,7 +76,7 @@ void allocate(Process* processes, int processCount, int quantum, char memoryStra
 void readInput(int argc, char* argv[], char filename[], char memoryStrategy[], int* quantum);
 Process* readProcesses(char filename[], int* processCount);
 int* CreateMemoryBlock();
-void checkProcesses(ProcessQueue* processQ, Process* processes, int processCount, int time, int* remaining);
+void checkProcesses(ProcessQueue* processQ, Process* processes, int processCount, int time, int* remaining, int quantum);
 int update(Process* CPUproc, int quantum, int* time, int* finished, int remaining);
 
 void firstFitRR(ProcessQueue* processQ, int* memory, Process* processes, int processCount, int quantum);
@@ -136,7 +136,7 @@ void firstFitRR(ProcessQueue* processQ, int* memory, Process* processes, int pro
             break;
         }
         /* check if any new processes need to added to the queue */
-        checkProcesses(processQ, processes, processCount, time, &remaining);
+        checkProcesses(processQ, processes, processCount, time, &remaining, quantum);
         
         /* take the process at the head of the queue,
             this process is now considered in the CPU */
@@ -234,7 +234,7 @@ void infiniteRR(ProcessQueue* processQ, Process* processes, int processCount, in
     while (finished < processCount) {
 
         /* check if any new processes need to added to the queue */
-        checkProcesses(processQ, processes, processCount, time, &remaining);
+        checkProcesses(processQ, processes, processCount, time, &remaining,quantum);
 
         /* take the process at the head of the queue,
             this process is now considered in the CPU */
@@ -318,11 +318,11 @@ int update(Process* CPUproc, int quantum, int* time, int* finished, int remainin
 
 /* Check for READY processes according to arrival time
 */
-void checkProcesses(ProcessQueue* processQ, Process* processes, int processCount, int time, int* remaining) {
+void checkProcesses(ProcessQueue* processQ, Process* processes, int processCount, int time, int* remaining, int quantum) {
 
     /* check if any processes are ready to enque based on arrival time */
     for (int i = 0; i < processCount; i++) {
-        if (processes[i].arrivalTime == time) {
+        if (processes[i].arrivalTime == time || (processes[i].arrivalTime >= time && processes[i].arrivalTime < (time-quantum))) {
             enqueue(processQ, &processes[i]);
             (*remaining)++;
         }
