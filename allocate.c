@@ -242,7 +242,6 @@ void infiniteRR(ProcessQueue* processQ, Process* processes, int processCount, in
         if (processQ->head != NULL) {
             CPUproc = (processQ->head->process);
         } else {
-            printf("t%d No Processes Queued\n", time);
             time++;
             continue;
         }
@@ -251,7 +250,6 @@ void infiniteRR(ProcessQueue* processQ, Process* processes, int processCount, in
         /* if there are other processes in the queue at the start of a quantum, SWITCH.
             send current process to back of the queue and run a new process in the CPU */
         while (instruction != CONTINUE) {
-            printf("SWITCH PROCESS!\n");
             Process* sendBack = dequeue(processQ);
             if (sendBack->state == FINISHED) {
                 printf("%d PROCESS %s FINISHED! timeUsed: %d\n", time, sendBack->processName, sendBack->cpuTimeUsed);
@@ -285,31 +283,21 @@ int update(Process* CPUproc, int quantum, int* time, int* finished, int remainin
     int isNew = FALSE, remainingTime;
     if ((*time % quantum == 0) && (CPUproc->state == READY)) {
         CPUproc->state = RUNNING;
-        /* mark the process as NEW, so that it can run for a quantum */
+        /* mark the process as NEW as up to this point, 
+            the current CPU process was only considered a candidate */
         isNew = TRUE;
         remainingTime = CPUproc->serviceTime - CPUproc->cpuTimeUsed;
         printf("RUNNING NEW PROCESS %s, time: %d, remainingTime: %d\n", CPUproc->processName, *time, remainingTime);
-    }
 
-    /* increment time used in CPU if it is RUNNING */
-    if ((CPUproc->state == RUNNING)) {
-
-        /* if process is FINISHED, mark its state in the CPU */
-        if (CPUproc->cpuTimeUsed == CPUproc->serviceTime) {
-            CPUproc->state = FINISHED;
-        } else {
-            remainingTime = CPUproc->serviceTime - CPUproc->cpuTimeUsed;
-            printf("%d running %s remainingTime %d\n", *time, CPUproc->processName, remainingTime);
-
-            /* increment CPU time used */
-            CPUproc->cpuTimeUsed++;   
-        }
+        /* increment total time, to indicate that a process is now in the CPU and can run for a quantum */
+        *time++;
     }
 
     /* check if quantum has elapsed, since process switching and completion
         can ONLY be performed at the end of a quantum*/
-    if (((*time + 1) % quantum == 0) && (!isNew)) {
-        if (CPUproc->state == FINISHED) {
+    if ((CPUproc->state == RUNNING) && ((*time + 1) % quantum == 0) && (!isNew)) {
+        if (CPUproc->cpuTimeUsed == CPUproc->serviceTime) {
+            CPUproc->state = FINISHED;
             (*finished)++;
             return FINISHED;
         }
@@ -318,6 +306,12 @@ int update(Process* CPUproc, int quantum, int* time, int* finished, int remainin
             return SWITCH;
         } 
     } 
+
+    /* run the process for ONE time unit */
+    if ((CPUproc->state == RUNNING)) {
+        /* increment CPU time used */
+        CPUproc->cpuTimeUsed++;  
+    }
 
     return CONTINUE;
 }
@@ -331,7 +325,6 @@ void checkProcesses(ProcessQueue* processQ, Process* processes, int processCount
         if (processes[i].arrivalTime == time) {
             enqueue(processQ, &processes[i]);
             (*remaining)++;
-            printf("PROCESS QUEUED! time: %d, name: %s, remaining: %d\n", time, processQ->head->process->processName, *remaining);
         }
     }
 }
