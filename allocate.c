@@ -33,6 +33,7 @@
 #define FREE 0
 #define ALLOCATED 1
 
+#define NEW 2
 #define SWITCH 1
 #define CONTINUE 0
 
@@ -79,7 +80,7 @@ Process* readProcesses(char filename[], int* processCount);
 void allocate(Process* processes, int processCount, int quantum, char memoryStrategy[]);
 void checkProcesses(ProcessQueue* processQ, Process* processes, int processCount, 
                     int time, int* remaining, int quantum);
-int update(Process* CPUproc, int quantum, int* time, int* finished, int remaining);
+int update(Process* CPUproc, int quantum, int* time, int* finished, int remaining, int* isNew);
 void calculateStatistics(Process* processes, int processCount);
 
 int* CreateMemory();
@@ -201,7 +202,8 @@ void firstFitRR(ProcessQueue* processQ, int* memory, Process* processes, int pro
 
         /* this is the first instruction call. It will determine what action to take for the quantum.
             the instruction is either CONTINUE, FINISHED, or SWITCH*/
-        int instruction = update(CPUproc, quantum, &time, &finished, remaining);
+        int isNew = FALSE;
+        int instruction = update(CPUproc, quantum, &time, &finished, remaining, &isNew);
 
         /* a CONTINUE call indicates that update() allowed the current CPUproc to run for a quantum.
             if not, there is a call to switch out the current CPUproc
@@ -253,7 +255,7 @@ void firstFitRR(ProcessQueue* processQ, int* memory, Process* processes, int pro
             /* This update call will only be done IF a new process is now in the CPU
                 or the current is allowed to continue, given no other ready processes, 
                 AND the process has been allocated memory */
-            instruction = update(CPUproc, quantum, &time, &finished, remaining);
+            instruction = update(CPUproc, quantum, &time, &finished, remaining, &isNew);
         }    
     }
 }
@@ -322,7 +324,14 @@ void infiniteRR(ProcessQueue* processQ, Process* processes, int processCount, in
 
         /* this is the first instruction call. It will determine what action to take for the quantum.
             the instruction is either CONTINUE, FINISHED, or SWITCH*/
-        int instruction = update(CPUproc, quantum, &time, &finished, remaining);
+        int isNew = FALSE;
+        int instruction = update(CPUproc, quantum, &time, &finished, remaining, &isNew);
+
+        if (isNew) {
+            int  remainingTime = CPUproc->serviceTime - CPUproc->cpuTimeUsed;
+            printf("%d,RUNNING,process-name=%s,remaining-time=%d\n", 
+                    (time - quantum), CPUproc->processName, (remainingTime + quantum));
+        }
 
         /* a CONTINUE call indicates that update() allowed the current CPUproc to run for a quantum.
             if not, there is a call to switch out the current CPUproc */
@@ -352,30 +361,32 @@ void infiniteRR(ProcessQueue* processQ, Process* processes, int processCount, in
 
             /* This update call will only be done IF a new process is now in the CPU */
             CPUproc = processQ->head->process;
-            instruction = update(CPUproc, quantum, &time, &finished, remaining);
+            instruction = update(CPUproc, quantum, &time, &finished, remaining, &isNew);
+            if (isNew) {
+                int  remainingTime = CPUproc->serviceTime - CPUproc->cpuTimeUsed;
+                printf("%d,RUNNING,process-name=%s,remaining-time=%d\n", 
+                (time - quantum), CPUproc->processName, (remainingTime + quantum));
+            }
         } 
     }
 }
 
 /* standard update function. Runs the CPU process for ONE time unit
 */
-int update(Process* CPUproc, int quantum, int* time, int* finished, int remaining) {
+int update(Process* CPUproc, int quantum, int* time, int* finished, int remaining, int* isNew) {
     /* check whether the current CPU process has just entered, 
         or if it was already running */
-    int isNew = FALSE, remainingTime;
     if (CPUproc->state == READY) {
         CPUproc->state = RUNNING;
         /* mark the process as NEW as up to this point, 
             the current CPU process was only considered a candidate */
-        isNew = TRUE;
-        remainingTime = CPUproc->serviceTime - CPUproc->cpuTimeUsed;
-        printf("%d,RUNNING,process-name=%s,remaining-time=%d\n", *time, CPUproc->processName, remainingTime);
+        *isNew = TRUE;
     }
 
     /* check if quantum has elapsed for RUNNING process, 
         since process switching and completion can ONLY be performed at the end of a quantum.
         isNew indiciates whether a process has already run for a quantum or not */
-    if ((CPUproc->state == RUNNING) && (!isNew)) {
+    if ((CPUproc->state == RUNNING) && (!(*isNew))) {
         /* if at the end of a quantum, a processes CPUtime has passed its serviceTime,
             it is FINISHED */
         if (CPUproc->cpuTimeUsed >= CPUproc->serviceTime) {
