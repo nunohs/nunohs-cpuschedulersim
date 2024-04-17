@@ -151,9 +151,9 @@ void calculateStatistics(Process* processes, int processCount){
         
     }
 
-    max_time_overhead = max_time_overhead;
+    max_time_overhead = round(max_time_overhead*100)/100;
     avg_time_turnaround = ceil((double)total_time_turnaround/processCount);
-    avg_time_overhead = total_time_overhead/processCount;
+    avg_time_overhead = round(total_time_overhead/processCount*100)/100;
 
     printf("Turnaround time %d\n",avg_time_turnaround);
     printf("Time overhead %.2f %.2f\n", max_time_overhead,avg_time_overhead );
