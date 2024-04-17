@@ -43,7 +43,6 @@ typedef struct {
     int arrivalTime;
     char processName[MAX_PROCESS_NAME_LEN];
     int serviceTime;
-    int remainingTime;
     int memoryRequirement;
     int state;
     int cpuTimeUsed;
@@ -72,15 +71,21 @@ ProcessQueue* createQueue();
 void enqueue(ProcessQueue* processQueue, Process* process);
 Process* dequeue(ProcessQueue* processQueue);
 
-/* Process Manager Functions */
-void allocate(Process* processes, int processCount, int quantum, char memoryStrategy[]);
+/* Pre-Task Process Functions */
 void readInput(int argc, char* argv[], char filename[], char memoryStrategy[], int* quantum);
 Process* readProcesses(char filename[], int* processCount);
-int* CreateMemoryBlock();
-void checkProcesses(ProcessQueue* processQ, Process* processes, int processCount, int time, int* remaining, int quantum);
+
+/* Process Manager Functions */
+void allocate(Process* processes, int processCount, int quantum, char memoryStrategy[]);
+void checkProcesses(ProcessQueue* processQ, Process* processes, int processCount, 
+                    int time, int* remaining, int quantum);
 int update(Process* CPUproc, int quantum, int* time, int* finished, int remaining);
 void calculateStatistics(Process* processes, int processCount);
 
+int* CreateMemory();
+int AllocateMemoryBlock(int* memory, int memoryRequirement);
+
+/* Task Algorithms */
 void firstFitRR(ProcessQueue* processQ, int* memory, Process* processes, int processCount, int quantum);
 void infiniteRR(ProcessQueue* processQ, Process* processes, int processCount, int quantum);
 
@@ -95,11 +100,6 @@ int main(int argc, char* argv[]) {
     /* read and store processes to be simulated */
     int processCount;
     Process* processes = readProcesses(filename, &processCount);
-    for (int i = 0; i < processCount; i++) {
-        printf("Process Name: %s, Arrival: %d, ServiceT: %d, RemainingT: %d, Memory: %d, State: %d, CPU: %d\n",
-                processes[i].processName, processes[i].arrivalTime, processes[i].serviceTime, processes[i].remainingTime,
-                processes[i].memoryRequirement, processes[i].state, processes[i].cpuTimeUsed);
-    }
 
     /* allocate the processes for the CPU */
     allocate(processes, processCount, quantum, memoryStrategy);
@@ -119,8 +119,7 @@ void allocate(Process* processes, int processCount, int quantum, char memoryStra
         infiniteRR(processQueue, processes, processCount, quantum);
     }
     else if (strcmp(memoryStrategy, FIRST_FIT) == 0) {
-        printf("RUNNING FIRST FIT!\n");
-        int* memory = CreateMemoryBlock();
+        int* memory = CreateMemory();
         firstFitRR(processQueue, memory, processes, processCount, quantum);
     }  
     calculateStatistics(processes,processCount);
@@ -151,9 +150,9 @@ void calculateStatistics(Process* processes, int processCount){
         
     }
 
-    max_time_overhead = max_time_overhead;
+    max_time_overhead = round(max_time_overhead*100)/100;
     avg_time_turnaround = ceil((double)total_time_turnaround/processCount);
-    avg_time_overhead = total_time_overhead/processCount;
+    avg_time_overhead = round(total_time_overhead/processCount*100)/100;
 
     printf("Turnaround time %d\n",avg_time_turnaround);
     printf("Time overhead %.2f %.2f\n", max_time_overhead,avg_time_overhead );
@@ -163,13 +162,13 @@ void calculateStatistics(Process* processes, int processCount){
 /* Round-Robin Scheduling with First-Fit Memory Allocation
 */
 void firstFitRR(ProcessQueue* processQ, int* memory, Process* processes, int processCount, int quantum) {
-    int time, finished, remaining, turnaroundT;
-    time = finished = remaining = turnaroundT = 0;
+    int time, finished, remaining;
+    time = finished = remaining = 0;
 
     /* loop will run until all processes are FINISHED*/
     while (finished < processCount) {
     
-        if (time == 25) {
+        if (time >= 90) {
             break;
         }
         /* check if any new processes need to added to the queue */
@@ -182,79 +181,114 @@ void firstFitRR(ProcessQueue* processQ, int* memory, Process* processes, int pro
             CPUproc = (processQ->head->process);
         } else {
             printf("t%d No Processes Queued\n", time);
-            time++;
+            time += quantum;
             continue;
         }
 
-        /* before running a process in CPU, check memory allocation
-            if not allocated, allocate memory */
-        if (CPUproc->FFmemoryAllocation == NOT_ALLOCATED) {
-            printf("process %s needs memory\n", CPUproc->processName);
-            /* scan through memory block to check for a fit */
-            int freeBlockSize = 0;
-            for (int i = 0; i < MEMORY_CAPACITY; i++) {
-                if (memory[i] == FREE) {
-                    freeBlockSize++;
-                    /* if there is space, mark the start index of memory block */
-                    if (freeBlockSize == CPUproc->memoryRequirement) {
-                        CPUproc->FFmemoryAllocation = i - CPUproc->memoryRequirement + 1;
-                        /* mark the block as allocated memory */
-                        for (int j = CPUproc->FFmemoryAllocation; j <= i; j++) {
-                            memory[j] = ALLOCATED;
-                        }
-                        printf("Memory Block Allocated! Process: %s, Allocation: %d, end: %d\n", 
-                                        CPUproc->processName, CPUproc->FFmemoryAllocation, (CPUproc->FFmemoryAllocation + CPUproc->memoryRequirement - 1));
-                    }
-                /* if a memory space is already ALLOCATED and freeBlocksize < memoryREQ,
-                    reset search */
-                } else {
-                    freeBlockSize = 0;
-                }
+        /* before running a process in CPU, check if has allocated memory */
+        while (CPUproc->FFmemoryAllocation == NOT_ALLOCATED) {
+            CPUproc->FFmemoryAllocation = AllocateMemoryBlock(memory, CPUproc->memoryRequirement);
+            printf("process %s allocatedMemory %d\n", CPUproc->processName, CPUproc->FFmemoryAllocation);
+
+            /* if memory is still not allocated, deque process and move to back of the queue */
+            if (CPUproc->FFmemoryAllocation == NOT_ALLOCATED) {
+                printf("MEMORY BLOCK NOT ALLOCATED for process %s!\n", CPUproc->processName);
+                Process* sendBack = dequeue(processQ);
+                enqueue(processQ, sendBack);
+                CPUproc = processQ->head->process;
             }
         }
-        /* if memory is still not allocated, deque process and move to back of the queue */
-        if (CPUproc->FFmemoryAllocation == NOT_ALLOCATED) {
-            printf("MEMORY BLOCK NOT ALLOCATED!\n");
+
+        /* this is the first instruction call. It will determine what action to take for the quantum.
+            the instruction is either CONTINUE, FINISHED, or SWITCH*/
+        int instruction = update(CPUproc, quantum, &time, &finished, remaining);
+
+        /* a CONTINUE call indicates that update() allowed the current CPUproc to run for a quantum.
+            if not, there is a call to switch out the current CPUproc
+            or that the process has FINISHED at the end of the quantum */
+        while (instruction != CONTINUE) {
             Process* sendBack = dequeue(processQ);
-            enqueue(processQ, sendBack);
-        }
 
-        /* run the process in the CPU for a quantum, as usual */
-        else {
-            int instruction = update(CPUproc, quantum, &time, &finished, remaining);
-            /* if there are other processes in the queue at the start of a quantum, SWITCH.
-                send current process to back of the queue and run a new process in the CPU */
-            while (instruction != CONTINUE) {
-                printf("SWITCH PROCESS!\n");
-                Process* sendBack = dequeue(processQ);
-                if (sendBack->state == FINISHED) {
-                    printf("%d PROCESS %s FINISHED!\n", time, sendBack->processName);
-                    remaining--;
-                } else {
-                    sendBack->state = READY;
-                    enqueue(processQ, sendBack);
-                }
+            /* if process is FINISHED, its serviceTime has been completed
+                and it can be removed from the queue */
+            if (sendBack->state == FINISHED) {
+                /* free the memory block allocated for the process */
 
+
+                remaining--;
+                printf("%d,FINISHED,process-name=%s,proc-remaining=%d\n", time, sendBack->processName, remaining);
+                sendBack->completionTime = time;
+        
                 /* continue as idlle if no other processes are queued*/
                 if (remaining == 0) {
                     break;
-                } else {
-                    /* put a new process into the CPU and run again */
-                    CPUproc = processQ->head->process;
-                    instruction = update(CPUproc, quantum, &time, &finished, remaining);
                 }
-            }    
-        }
 
-    time++;
+            /* if instructions is SWITCH, 
+                which means that the current process has already run the last quantum, 
+                AND there are also other processes READY,
+                the CPU will switch out the process and send the current one to the back. */
+            } else if (instruction == SWITCH) {
+                sendBack->state = READY;
+                enqueue(processQ, sendBack);
+                CPUproc = processQ->head->process;
+            }   
+
+            
+            /* in the case that a NEW process is in the CPU, but it has not been allocated memory.. */
+            while (CPUproc->FFmemoryAllocation == NOT_ALLOCATED) {
+                /* allocate memory for new process */
+                CPUproc->FFmemoryAllocation = AllocateMemoryBlock(memory, CPUproc->memoryRequirement);
+                printf("process %s allocatedMemory %d\n", CPUproc->processName, CPUproc->FFmemoryAllocation);
+
+                /* if memory is still not allocated, deque process and move to back of the queue */
+                if (CPUproc->FFmemoryAllocation == NOT_ALLOCATED) {
+                    printf("MEMORY BLOCK NOT ALLOCATED for process %s!\n", CPUproc->processName);
+                    Process* sendBack = dequeue(processQ);
+                    enqueue(processQ, sendBack);
+                    CPUproc = processQ->head->process;
+                }
+            }
+
+            /* This update call will only be done IF a new process is now in the CPU
+                or the current is allowed to continue, given no other ready processes, 
+                AND the process has been allocated memory */
+            instruction = update(CPUproc, quantum, &time, &finished, remaining);
+        }    
     }
 }
+/* Allocate a contiguous block of memory for a process
+*/    
+int AllocateMemoryBlock(int* memory, int memoryRequirement) {
     
+    int freeBlockSize = 0, memoryAllocation = NOT_ALLOCATED;
+
+    /* scan through memory block to check for a fit */
+    for (int i = 0; i < MEMORY_CAPACITY; i++) {
+        if (memory[i] == FREE) {
+            freeBlockSize++;
+            /* if there is space, mark the start index of memory block */
+            if (freeBlockSize == memoryRequirement) {
+                memoryAllocation = i - memoryRequirement + 1;
+                /* mark the block as allocated memory */
+                for (int j = memoryAllocation; j <= i; j++) {
+                    memory[j] = ALLOCATED;
+                }
+            }
+        /* if a memory space is already ALLOCATED and freeBlocksize < memoryREQ,
+            reset search */
+        } else {
+            freeBlockSize = 0;
+        }
+    }
+    return memoryAllocation;
+}
+
 /* Allocation of a contiguous memory block;
     memory is treated as an integer array of size 2048 KB and each element is 1KB of memory,
     where 0 indicates a free spot and 1 indicates an allocated space
 */
-int* CreateMemoryBlock() {
+int* CreateMemory() {
     int* memory = (int*) calloc(MEMORY_CAPACITY, sizeof(int));
     if (memory == NULL) {
         fprintf(stderr, "Failed to allocate memory block\n");
@@ -265,8 +299,8 @@ int* CreateMemoryBlock() {
 
 /* Round-Robin Scheduling with Infinite Memory */
 void infiniteRR(ProcessQueue* processQ, Process* processes, int processCount, int quantum) {
-    int time, finished, remaining, turnaroundTime;
-    time = finished = remaining = turnaroundTime = 0;
+    int time, finished, remaining;
+    time = finished = remaining = 0;
 
     while (finished < processCount) {
 
@@ -278,18 +312,25 @@ void infiniteRR(ProcessQueue* processQ, Process* processes, int processCount, in
         Process* CPUproc;
         if (processQ->head != NULL) {
             CPUproc = (processQ->head->process);
-        } else {
+        } 
+        /* if there are no READY processes in the queue,
+            the CPU will run idle for another quantum */
+        else {
             time += quantum;
             continue;
         }
 
+        /* this is the first instruction call. It will determine what action to take for the quantum.
+            the instruction is either CONTINUE, FINISHED, or SWITCH*/
         int instruction = update(CPUproc, quantum, &time, &finished, remaining);
-        /* if there are other processes in the queue at the start of a quantum, SWITCH.
-            send current process to back of the queue and run a new process in the CPU */
+
+        /* a CONTINUE call indicates that update() allowed the current CPUproc to run for a quantum.
+            if not, there is a call to switch out the current CPUproc */
         while (instruction != CONTINUE) {
             Process* sendBack = dequeue(processQ);
 
-            /* if process is FINISHED, dequue, print, and decrement remainingProcesses*/
+            /* if process is FINISHED, its serviceTime has been completed
+                and it can be removed from the queue */
             if (sendBack->state == FINISHED) {
                 remaining--;
                 printf("%d,FINISHED,process-name=%s,proc-remaining=%d\n", time, sendBack->processName, remaining);
@@ -300,24 +341,20 @@ void infiniteRR(ProcessQueue* processQ, Process* processes, int processCount, in
                     break;
                 }
 
-            /* if instructions is switch, and there are other processes READY,
-                 send to ready */
-            } else if (sendBack->state == SWITCH) {
-                if (remaining > 1) {
-                    sendBack->state = READY;
-                } 
-                /* BUT if it is the only processs, enqueue in RUNNING state */
+            /* if instructions is SWITCH, 
+                which means that the current process has already run the last quantum, 
+                AND there are also other processes READY,
+                the CPU will switch out the process and send the current one to the back. */
+            } else if (instruction == SWITCH) {
+                sendBack->state = READY;
                 enqueue(processQ, sendBack);
             }
 
-            /* put a new process into the CPU and run again */
+            /* This update call will only be done IF a new process is now in the CPU */
             CPUproc = processQ->head->process;
             instruction = update(CPUproc, quantum, &time, &finished, remaining);
         } 
-
-        time += quantum;
     }
-
 }
 
 /* standard update function. Runs the CPU process for ONE time unit
@@ -335,24 +372,31 @@ int update(Process* CPUproc, int quantum, int* time, int* finished, int remainin
         printf("%d,RUNNING,process-name=%s,remaining-time=%d\n", *time, CPUproc->processName, remainingTime);
     }
 
-    /* check if quantum has elapsed, since process switching and completion
-        can ONLY be performed at the end of a quantum*/
+    /* check if quantum has elapsed for RUNNING process, 
+        since process switching and completion can ONLY be performed at the end of a quantum.
+        isNew indiciates whether a process has already run for a quantum or not */
     if ((CPUproc->state == RUNNING) && (!isNew)) {
+        /* if at the end of a quantum, a processes CPUtime has passed its serviceTime,
+            it is FINISHED */
         if (CPUproc->cpuTimeUsed >= CPUproc->serviceTime) {
             CPUproc->state = FINISHED;
             (*finished)++;
             return FINISHED;
         } 
-        /* SWITCH only if there are other processes READY waiting */
+        /* if a process has already run for a quantum and there are other READY processes in the queue,
+            the process must be SWITCHed out */
         else if (remaining > 1) { 
             return SWITCH;
         } 
     }
 
-    /* run the process for ONE time unit */
+    /* run the process for ONE quantum. 
+        this will run ONLY if the process isNew
+        or if there are no other processes in the queue */
     if ((CPUproc->state == RUNNING)) {
-        /* increment CPU time used */
-        CPUproc->cpuTimeUsed += quantum;  
+        /* increment CPU time used and totalTime by quantum */
+        CPUproc->cpuTimeUsed += quantum;
+        (*time) += quantum;  
     }
 
     return CONTINUE;
@@ -364,9 +408,13 @@ void checkProcesses(ProcessQueue* processQ, Process* processes, int processCount
 
     /* check if any processes are ready to enque based on arrival time */
     for (int i = 0; i < processCount; i++) {
-        if (processes[i].arrivalTime == time || (processes[i].arrivalTime >= time && processes[i].arrivalTime < (time-quantum))) {
+        /* in the case that arrival time is not a multiple of the quantum,
+            test if current time has overtaken arrival time,
+            but only enque if arrival time was in between the current quantum and the previous */
+        if ((processes[i].arrivalTime <= time) && (processes[i].arrivalTime > (time-quantum))) {
             enqueue(processQ, &processes[i]);
             (*remaining)++;
+            printf("t%d PROCESS %s added, remaining: %d\n", time, processes[i].processName, *remaining);
         }
     }
 }  
@@ -428,7 +476,6 @@ Process* readProcesses(char filename[], int* processCount) {
         processes[*processCount].arrivalTime = arrival;
         strcpy(processes[*processCount].processName, name);
         processes[*processCount].serviceTime = serviceTime;
-        processes[*processCount].remainingTime = serviceTime;
         processes[*processCount].memoryRequirement = memoryReq;
         processes[*processCount].state = READY;
         processes[*processCount].cpuTimeUsed = READY;
