@@ -89,7 +89,7 @@ int update(Process* CPUproc, int quantum, int* time, int* finished, int remainin
 void calculateStatistics(Process* processes, int processCount);
 
 int calculateMemUsage(int* memory);
-int calculatePageMemUsage(int* memory);
+int calculatePageMemUsage(int* pages);
 int* createMemory();
 int* createPages();
 int allocateMemoryBlock(int* memory, int memoryRequirement);
@@ -207,18 +207,13 @@ void pagedMemoryRR(ProcessQueue* processQ, int* pages, Process* processes, int p
         if (CPUproc->PmemoryAllocation == NULL || CPUproc->PmemoryAllocation[0] == NOT_ALLOCATED) {
             CPUproc->PmemoryAllocation = allocatePages(pages, CPUproc->memoryRequirement, &CPUproc->sizeOfFrames);
 
-             /*for(int i=0;i<2;i++){
-                    printf("%d",CPUproc->PmemoryAllocation[i]);
-                }
-                */
-
-            /* if memory is still not allocated, evict least recently used pages of a processor */
+            /* if memory is still not allocated, evict least recently used pages of a processor
+               until enough memory is available */
             if (CPUproc->PmemoryAllocation[0] == NOT_ALLOCATED) {
                     while(CPUproc->PmemoryAllocation[0] == NOT_ALLOCATED){
                         evictLRU(processCount,processes,pages,time);
                         CPUproc->PmemoryAllocation = allocatePages(pages, CPUproc->memoryRequirement, &CPUproc->sizeOfFrames);
                     }
-               
             }
         }
       
@@ -262,7 +257,7 @@ void pagedMemoryRR(ProcessQueue* processQ, int* pages, Process* processes, int p
                 and it can be removed from the queue */
             if (sendBack->state == FINISHED) {
                 /* free the memory block allocated for the process */
-                printf("%d,EVICTED,evicted-frames[",time);
+                printf("%d,EVICTED,evicted-frames=[",time);
                 for(int i=0; i<sendBack->sizeOfFrames;i++){
                     printf("%d",sendBack->PmemoryAllocation[i]);
                     if(i<sendBack->sizeOfFrames - 1){
@@ -304,7 +299,6 @@ void pagedMemoryRR(ProcessQueue* processQ, int* pages, Process* processes, int p
                 if (CPUproc->PmemoryAllocation[0] == NOT_ALLOCATED) {
                     while(CPUproc->PmemoryAllocation[0] == NOT_ALLOCATED){
                         evictLRU(processCount,processes,pages,time);
-
                         CPUproc->PmemoryAllocation = allocatePages(pages, CPUproc->memoryRequirement, &CPUproc->sizeOfFrames);
                     }
                
@@ -318,8 +312,7 @@ void pagedMemoryRR(ProcessQueue* processQ, int* pages, Process* processes, int p
 
             /* if the process was NEW in the CPU, print out a message */
             if (isNew) {
-                  int  remainingTime = CPUproc->serviceTime - CPUproc->cpuTimeUsed;
-            
+                int  remainingTime = CPUproc->serviceTime - CPUproc->cpuTimeUsed;
                 int memUsage = calculatePageMemUsage(pages);
            
                 printf("%d,RUNNING,process-name=%s,remaining-time=%d,mem-usage=%d%%,mem-frames=[", 
@@ -336,6 +329,7 @@ void pagedMemoryRR(ProcessQueue* processQ, int* pages, Process* processes, int p
                     }
                 }
                 printf("]\n");
+            
             }
         }    
     }
@@ -470,7 +464,7 @@ void evictLRU(int processCount, Process* processes, int* memory, int time){
             }
         }
     }
-    printf("%d,EVICTED,evicted-frames[",time);
+    printf("%d,EVICTED,evicted-frames=[",time);
     for(int i=0; i<processes[least_recent].sizeOfFrames;i++){
         printf("%d",processes[least_recent].PmemoryAllocation[i]);
         if(i<processes[least_recent].sizeOfFrames - 1){
@@ -498,10 +492,10 @@ int calculateMemUsage(int* memory) {
     return (int)usage;
 }
 
-int calculatePageMemUsage(int* memory) {
+int calculatePageMemUsage(int* pages) {
     double usage = 0;
     for (int i = 0; i < NUM_PAGES; i++) {
-        if (memory[i] == ALLOCATED) {
+        if (pages[i] == ALLOCATED) {
             usage++;
         }
     }
@@ -524,7 +518,9 @@ void deallocatePages(int* memory, int* frameSize, int* frames){
     for(int i=0; i< *frameSize; i++){
         free_page_number = frames[i];
         memory[free_page_number] = FREE;
+        frames[i] = NOT_ALLOCATED;
     }
+   
 }
 
 /* Allocate a contiguous block of memory for a process
