@@ -526,8 +526,8 @@ Process* readProcesses(char filename[], int* processCount) {
 
     /* reading processes into the array */
     int arrival, serviceTime, memoryReq;
-    char name[MAX_PROCESS_NAME_LEN];
-    while (fscanf(fp, "%d %s %d %d", &arrival, &name, &serviceTime, &memoryReq) == 4) {
+    char* name = malloc(sizeof(char) * MAX_PROCESS_NAME_LEN);
+    while (fscanf(fp, "%d %s %d %d", &arrival, name, &serviceTime, &memoryReq) == 4) {
         /* reallocate memory if needed */
         if (*processCount == curentSize) {
             curentSize *= 2;

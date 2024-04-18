@@ -3,4 +3,4 @@
 /workspace.xml
 *.exe
 *.o
-allocate
+/allocate
