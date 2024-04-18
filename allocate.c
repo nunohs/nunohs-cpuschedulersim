@@ -126,6 +126,9 @@ void allocate(Process* processes, int processCount, int quantum, char memoryStra
         firstFitRR(processQueue, memory, processes, processCount, quantum);
     }  
     calculateStatistics(processes,processCount);
+
+    
+
 }
   
 
@@ -522,7 +525,7 @@ Process* readProcesses(char filename[], int* processCount) {
     *processCount = 0;
 
     /* reading processes into the array */
-    int arrival, serviceTime, memoryReq, remainingTime;
+    int arrival, serviceTime, memoryReq;
     char name[MAX_PROCESS_NAME_LEN];
     while (fscanf(fp, "%d %s %d %d", &arrival, &name, &serviceTime, &memoryReq) == 4) {
         /* reallocate memory if needed */
