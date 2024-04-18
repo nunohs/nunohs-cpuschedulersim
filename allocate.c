@@ -30,6 +30,8 @@
 
 /* Memory Constants and Flags */
 #define MEMORY_CAPACITY 2048 // Total Memory in KB
+#define NUM_PAGES 512
+#define PAGE_SIZE 4
 #define NOT_ALLOCATED -1
 #define FREE 0
 #define ALLOCATED 1
@@ -48,6 +50,9 @@ typedef struct {
     int state;
     int cpuTimeUsed;
     int FFmemoryAllocation;
+    int* PmemoryAllocation;
+    int sizeOfFrames;
+    int lastUsed;
     int completionTime;
 } Process;
 
@@ -84,13 +89,19 @@ int update(Process* CPUproc, int quantum, int* time, int* finished, int remainin
 void calculateStatistics(Process* processes, int processCount);
 
 int calculateMemUsage(int* memory);
+int calculatePageMemUsage(int* memory);
 int* createMemory();
+int* createPages();
 int allocateMemoryBlock(int* memory, int memoryRequirement);
+int* allocatePages(int* memory, int memoryRequirement, int* frameSize);
 void deallocateMemoryBlock(int* memory, int allocationStart, int allocationSize);
+void deallocatePages(int* memory, int* frameSize, int* frames);
+void evictLRU(int processCount, Process* processes, int* memory, int time);
 
 /* Task Algorithms */
 void firstFitRR(ProcessQueue* processQ, int* memory, Process* processes, int processCount, int quantum);
 void infiniteRR(ProcessQueue* processQ, Process* processes, int processCount, int quantum);
+void pagedMemoryRR(ProcessQueue* processQ, int* pages, Process* processes, int processCount, int quantum);
 
 /*******************************************************************************************************/
 int main(int argc, char* argv[]) {
@@ -125,7 +136,13 @@ void allocate(Process* processes, int processCount, int quantum, char memoryStra
         int* memory = createMemory();
         firstFitRR(processQueue, memory, processes, processCount, quantum);
     }  
+    else if (strcmp(memoryStrategy, PAGED) == 0) {
+        int* pages = createPages();
+        pagedMemoryRR(processQueue, pages, processes, processCount, quantum);
+        
+    }
     calculateStatistics(processes,processCount);
+    
 }
   
 
@@ -164,6 +181,165 @@ void calculateStatistics(Process* processes, int processCount){
 }
 
 /*******************************************************************************************************/
+/*Round-Robin Scheduling with Paged Memory Allocation
+*/
+void pagedMemoryRR(ProcessQueue* processQ, int* pages, Process* processes, int processCount, int quantum){
+    int time, finished, remaining;
+    time = finished = remaining = 0;
+
+    while (finished < processCount){
+        // Checks if a new process can be added to the queue
+        checkProcesses(processQ, processes, processCount, time, &remaining, quantum);
+
+        /*Takes the process at the head of the queue*/
+        Process* CPUproc;
+        if (processQ->head != NULL) {
+            CPUproc = (processQ->head->process);
+        } else {
+            //printf("t%d No Processes Queued\n", time);
+            time += quantum;
+            continue;
+        }
+        /* before running a process in CPU, check if it has allocated memory */
+      
+        if (CPUproc->PmemoryAllocation == NULL || CPUproc->PmemoryAllocation[0] == NOT_ALLOCATED) {
+            CPUproc->PmemoryAllocation = allocatePages(pages, CPUproc->memoryRequirement, &CPUproc->sizeOfFrames);
+
+             /*for(int i=0;i<2;i++){
+                    printf("%d",CPUproc->PmemoryAllocation[i]);
+                }
+                */
+
+            /* if memory is still not allocated, evict least recently used pages of a processor */
+            if (CPUproc->PmemoryAllocation[0] == NOT_ALLOCATED) {
+                    while(CPUproc->PmemoryAllocation[0] == NOT_ALLOCATED){
+                        evictLRU(processCount,processes,pages,time);
+                        CPUproc->PmemoryAllocation = allocatePages(pages, CPUproc->memoryRequirement, &CPUproc->sizeOfFrames);
+                    }
+               
+            }
+        }
+      
+        /* isNew flag determines whether the process in the CPU was switched from READY to RUNNING */
+        int isNew = FALSE;
+
+        /* this is the first instruction call. It will determine what action to take for the quantum.
+            the instruction is either CONTINUE, FINISHED, or SWITCH*/
+        int instruction = update(CPUproc, quantum, &time, &finished, remaining, &isNew);
+
+        /* if the process was NEW in the CPU, print out a message */
+        if (isNew) {
+            
+            int  remainingTime = CPUproc->serviceTime - CPUproc->cpuTimeUsed;
+            
+            int memUsage = calculatePageMemUsage(pages);
+           
+            printf("%d,RUNNING,process-name=%s,remaining-time=%d,mem-usage=%d,mem-frames=[", 
+                    /* decrement time in message in accordance with qunatum */
+                    (time - quantum), CPUproc->processName, (remainingTime + quantum), 
+                        memUsage);
+            CPUproc->lastUsed = time-quantum;
+
+            for(int i=0; i<CPUproc->sizeOfFrames;i++){
+                printf("%d",CPUproc->PmemoryAllocation[i]);
+                if(i<CPUproc->sizeOfFrames - 1){
+                    printf(",");
+                }
+            }
+            printf("]\n");
+
+        }
+
+        /* a CONTINUE call indicates that update() allowed the current CPUproc to run for a quantum.
+            if not, there is a call to switch out the current CPUproc
+            or that the process has FINISHED at the end of the quantum */
+        while (instruction != CONTINUE) {
+            Process* sendBack = dequeue(processQ);
+
+            /* if process is FINISHED, its serviceTime has been completed
+                and it can be removed from the queue */
+            if (sendBack->state == FINISHED) {
+                /* free the memory block allocated for the process */
+                printf("%d,EVICTED,evicted-frames[",time);
+                for(int i=0; i<sendBack->sizeOfFrames;i++){
+                    printf("%d",sendBack->PmemoryAllocation[i]);
+                    if(i<sendBack->sizeOfFrames - 1){
+                        printf(",");
+                    }
+                }
+                    printf("]\n");
+
+                deallocatePages(pages, &sendBack->sizeOfFrames, sendBack->PmemoryAllocation);
+
+                remaining--;
+                printf("%d,FINISHED,process-name=%s,proc-remaining=%d\n", time, sendBack->processName, remaining);
+                sendBack->completionTime = time;
+        
+                /* continue as idlle if no other processes are queued*/
+                if (remaining == 0) {
+                    break;
+                }
+
+            /* if instructions is SWITCH, 
+                which means that the current process has already run the last quantum, 
+                AND there are also other processes READY,
+                the CPU will switch out the process and send the current one to the back. */
+            } else if (instruction == SWITCH) {
+                sendBack->lastUsed = time;
+                sendBack->state = READY;
+                enqueue(processQ, sendBack);
+            } 
+
+            /* select the new process to run in the CPU */
+            CPUproc = processQ->head->process;  
+
+            /* in the case that a NEW process is in the CPU, but it has not been allocated memory.. */
+            if (CPUproc->PmemoryAllocation == NULL || CPUproc->PmemoryAllocation[0] == NOT_ALLOCATED) {
+                CPUproc->PmemoryAllocation = allocatePages(pages, CPUproc->memoryRequirement, &CPUproc->sizeOfFrames);
+
+            /* if memory is still not allocated, evict least recently used pages of a processor
+               until there is enough memory for the current processor */
+                if (CPUproc->PmemoryAllocation[0] == NOT_ALLOCATED) {
+                    while(CPUproc->PmemoryAllocation[0] == NOT_ALLOCATED){
+                        evictLRU(processCount,processes,pages,time);
+
+                        CPUproc->PmemoryAllocation = allocatePages(pages, CPUproc->memoryRequirement, &CPUproc->sizeOfFrames);
+                    }
+               
+            }
+        }
+
+            /* This update call will only be done IF a new process is now in the CPU
+                or the current process is allowed to continue, given no other ready processes, 
+                AND the process has been allocated memory */
+            instruction = update(CPUproc, quantum, &time, &finished, remaining, &isNew);
+
+            /* if the process was NEW in the CPU, print out a message */
+            if (isNew) {
+                  int  remainingTime = CPUproc->serviceTime - CPUproc->cpuTimeUsed;
+            
+                int memUsage = calculatePageMemUsage(pages);
+           
+                printf("%d,RUNNING,process-name=%s,remaining-time=%d,mem-usage=%d,mem-frames=[", 
+                    /* decrement time in message in accordance with qunatum */
+                    (time - quantum), CPUproc->processName, (remainingTime + quantum), 
+                        memUsage);
+
+            CPUproc->lastUsed = time-quantum;
+
+                for(int i=0; i<CPUproc->sizeOfFrames;i++){
+                    printf("%d",CPUproc->PmemoryAllocation[i]);
+                    if(i<CPUproc->sizeOfFrames - 1){
+                        printf(",");
+                    }
+                }
+                printf("]\n");
+            }
+        }    
+    }
+    
+    
+}
 
 /* Round-Robin Scheduling with First-Fit Memory Allocation
 */
@@ -281,6 +457,31 @@ void firstFitRR(ProcessQueue* processQ, int* memory, Process* processes, int pro
     }
 }
 
+/*Evict pages of least recently used processor
+*/
+void evictLRU(int processCount, Process* processes, int* memory, int time){
+    int least_recent = 0;
+    for(int i=0; i<processCount; i++){
+        if(processes[i].state != FINISHED && processes[i].lastUsed >= 0){
+            if(processes[i].lastUsed < least_recent){
+                least_recent = i;
+            }
+        }
+    }
+    printf("%d,EVICTED,evicted-frames[",time);
+    for(int i=0; i<processes[least_recent].sizeOfFrames;i++){
+        printf("%d",processes[least_recent].PmemoryAllocation[i]);
+        if(i<processes[least_recent].sizeOfFrames - 1){
+            printf(",");
+        }
+    }
+    printf("]\n");
+
+    deallocatePages(memory,&processes[least_recent].sizeOfFrames,
+        processes[least_recent].PmemoryAllocation);
+}
+
+
 /* calculate percentage of total memory used, rounded up
 */
 int calculateMemUsage(int* memory) {
@@ -295,11 +496,32 @@ int calculateMemUsage(int* memory) {
     return (int)usage;
 }
 
+int calculatePageMemUsage(int* memory) {
+    double usage = 0;
+    for (int i = 0; i < NUM_PAGES; i++) {
+        if (memory[i] == ALLOCATED) {
+            usage++;
+        }
+    }
+    usage = ceil((usage / NUM_PAGES) * 100);
+
+    return (int)usage;
+}
+
 /* Free the block of memory associate with a process 
 */
 void deallocateMemoryBlock(int* memory, int allocationStart, int allocationSize) {
     for (int i = allocationStart; i < (allocationStart + allocationSize); i++) {
         memory[i] = FREE;
+    }
+}
+
+/*Free the pages associate with a process */
+void deallocatePages(int* memory, int* frameSize, int* frames){
+    int free_page_number = 0;
+    for(int i=0; i< *frameSize; i++){
+        free_page_number = frames[i];
+        memory[free_page_number] = FREE;
     }
 }
 
@@ -329,6 +551,62 @@ int allocateMemoryBlock(int* memory, int memoryRequirement) {
     }
     return memoryAllocation;
 }
+// Allocates pages for a process
+int* allocatePages(int* memory, int memoryRequirement, int* frameSize) {
+
+    int freeBlockSize = 0, memoryAllocation = NOT_ALLOCATED;
+    int pagesRequired = 0;
+
+    // Allocate memory into pages
+    if(memoryRequirement % PAGE_SIZE == 0 ){
+        pagesRequired = memoryRequirement/PAGE_SIZE;
+    } else{
+        pagesRequired = (memoryRequirement/PAGE_SIZE) + 1;
+    }
+
+    *frameSize = pagesRequired;
+    int* frames = (int*) malloc(pagesRequired * sizeof(int));
+    if (frames == NULL) {
+        fprintf(stderr, "Failed to allocate memory block\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // Initialize the frames
+    for(int i = 0; i< pagesRequired ; i++){
+        frames[i] = NOT_ALLOCATED;
+    }
+
+    /* scan through memory block to check for a fit */
+    for (int i = 0; i < NUM_PAGES; i++) {
+        if (memory[i] == FREE) {
+            freeBlockSize++;
+            /* if there is space, mark the start index of memory block */
+            if (freeBlockSize == pagesRequired) {
+                memoryAllocation = i - pagesRequired + 1;
+                /* mark the block as allocated memory */
+                for (int j = memoryAllocation; j <= i; j++) {
+                    if(memory[j] != ALLOCATED){
+                        memory[j] = ALLOCATED;
+
+                        // mark the frames used by the processor
+                        for(int k=0; k<pagesRequired; k++){
+                            if(frames[k] == NOT_ALLOCATED){
+                                frames[k] = j;
+                                //printf("%d,",j);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        /* if a memory space is already ALLOCATED and freeBlocksize < memoryREQ,
+            reset search */
+        } else {
+            freeBlockSize = 0;
+        }
+    }
+    return frames;
+}
 
 /* Allocation of a contiguous memory block;
     memory is treated as an integer array of size 2048 KB and each element is 1KB of memory,
@@ -336,6 +614,16 @@ int allocateMemoryBlock(int* memory, int memoryRequirement) {
 */
 int* createMemory() {
     int* memory = (int*) calloc(MEMORY_CAPACITY, sizeof(int));
+    if (memory == NULL) {
+        fprintf(stderr, "Failed to allocate memory block\n");
+        exit(EXIT_FAILURE);
+    }
+    return memory;
+}
+
+//Merge with createMemory later
+int* createPages(){
+    int* memory = (int*) calloc(NUM_PAGES, sizeof(int));
     if (memory == NULL) {
         fprintf(stderr, "Failed to allocate memory block\n");
         exit(EXIT_FAILURE);
@@ -543,6 +831,9 @@ Process* readProcesses(char filename[], int* processCount) {
         processes[*processCount].state = READY;
         processes[*processCount].cpuTimeUsed = READY;
         processes[*processCount].FFmemoryAllocation = NOT_ALLOCATED;
+        processes[*processCount].PmemoryAllocation = NULL;
+        processes[*processCount].sizeOfFrames = 0;
+        processes[*processCount].lastUsed = NOT_ALLOCATED;
         processes[*processCount].completionTime = 0;
         (*processCount)++;
     }
