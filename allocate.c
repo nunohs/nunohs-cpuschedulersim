@@ -142,7 +142,9 @@ void allocate(Process* processes, int processCount, int quantum, char memoryStra
         
     }
     calculateStatistics(processes,processCount);
-    
+
+    free(processes);
+
 }
   
 
@@ -234,7 +236,7 @@ void pagedMemoryRR(ProcessQueue* processQ, int* pages, Process* processes, int p
             
             int memUsage = calculatePageMemUsage(pages);
            
-            printf("%d,RUNNING,process-name=%s,remaining-time=%d,mem-usage=%d,mem-frames=[", 
+            printf("%d,RUNNING,process-name=%s,remaining-time=%d,mem-usage=%d%%,mem-frames=[", 
                     /* decrement time in message in accordance with qunatum */
                     (time - quantum), CPUproc->processName, (remainingTime + quantum), 
                         memUsage);
@@ -320,7 +322,7 @@ void pagedMemoryRR(ProcessQueue* processQ, int* pages, Process* processes, int p
             
                 int memUsage = calculatePageMemUsage(pages);
            
-                printf("%d,RUNNING,process-name=%s,remaining-time=%d,mem-usage=%d,mem-frames=[", 
+                printf("%d,RUNNING,process-name=%s,remaining-time=%d,mem-usage=%d%%,mem-frames=[", 
                     /* decrement time in message in accordance with qunatum */
                     (time - quantum), CPUproc->processName, (remainingTime + quantum), 
                         memUsage);
@@ -810,9 +812,9 @@ Process* readProcesses(char filename[], int* processCount) {
     *processCount = 0;
 
     /* reading processes into the array */
-    int arrival, serviceTime, memoryReq, remainingTime;
-    char name[MAX_PROCESS_NAME_LEN];
-    while (fscanf(fp, "%d %s %d %d", &arrival, &name, &serviceTime, &memoryReq) == 4) {
+    int arrival, serviceTime, memoryReq;
+    char* name = malloc(sizeof(char) * MAX_PROCESS_NAME_LEN);
+    while (fscanf(fp, "%d %s %d %d", &arrival, name, &serviceTime, &memoryReq) == 4) {
         /* reallocate memory if needed */
         if (*processCount == curentSize) {
             curentSize *= 2;
