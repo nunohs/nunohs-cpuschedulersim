@@ -619,7 +619,7 @@ int* createMemory() {
     return memory;
 }
 
-//Merge with createMemory later
+// Merge with createMemory later
 int* createPages(){
     int* memory = (int*) calloc(NUM_PAGES, sizeof(int));
     if (memory == NULL) {
