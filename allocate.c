@@ -143,6 +143,7 @@ void allocate(Process* processes, int processCount, int quantum, char memoryStra
     }
     calculateStatistics(processes,processCount);
 
+    free(processQueue);
     free(processes);
 
 }
