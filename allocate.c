@@ -333,6 +333,9 @@ void pagedMemoryRR(ProcessQueue* processQ, int* pages, Process* processes, int p
             }
         }    
     }
+    for(int i=0; i<processCount;i++){
+        free(processes[i].PmemoryAllocation);
+    }
     free(pages);
 }
 
@@ -519,8 +522,7 @@ void deallocatePages(int* memory, int* frameSize, int* frames){
         memory[free_page_number] = FREE;
         frames[i] = NOT_ALLOCATED;
     }
-    free(frames);
-    frames = NULL;
+    
 }
 
 /* Allocate a contiguous block of memory for a process
