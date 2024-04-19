@@ -836,6 +836,8 @@ Process* readProcesses(char filename[], int* processCount) {
         (*processCount)++;
     }
 
+    free(name);
+
     fclose(fp);
     return processes;
 }
