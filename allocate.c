@@ -90,8 +90,7 @@ void calculateStatistics(Process* processes, int processCount);
 
 int calculateMemUsage(int* memory);
 int calculatePageMemUsage(int* pages);
-int* createMemory();
-int* createPages();
+int* createMemory(char memoryStrategy[]);
 int allocateMemoryBlock(int* memory, int memoryRequirement);
 int* allocatePages(int* memory, int memoryRequirement, int* frameSize);
 void deallocateMemoryBlock(int* memory, int allocationStart, int allocationSize);
@@ -133,11 +132,11 @@ void allocate(Process* processes, int processCount, int quantum, char memoryStra
         infiniteRR(processQueue, processes, processCount, quantum);
     }
     else if (strcmp(memoryStrategy, FIRST_FIT) == 0) {
-        int* memory = createMemory();
+        int* memory = createMemory(memoryStrategy);
         firstFitRR(processQueue, memory, processes, processCount, quantum);
     }  
     else if (strcmp(memoryStrategy, PAGED) == 0) {
-        int* pages = createPages();
+        int* pages = createMemory(memoryStrategy);
         pagedMemoryRR(processQueue, pages, processes, processCount, quantum);
         
     }
@@ -160,7 +159,8 @@ void calculateStatistics(Process* processes, int processCount){
         
 
         // Time Overhead
-        double time_overhead = (double)(processes[i].completionTime - processes[i].arrivalTime)/processes[i].serviceTime;
+        double time_overhead = (double)(processes[i].completionTime - 
+                                processes[i].arrivalTime)/processes[i].serviceTime;
         total_time_overhead += time_overhead;
         if(max_time_overhead<time_overhead){
             max_time_overhead = time_overhead;
@@ -204,7 +204,6 @@ void pagedMemoryRR(ProcessQueue* processQ, int* pages, Process* processes, int p
             continue;
         }
         /* before running a process in CPU, check if it has allocated memory */
-      
         if (CPUproc->PmemoryAllocation == NULL || CPUproc->PmemoryAllocation[0] == NOT_ALLOCATED) {
             CPUproc->PmemoryAllocation = allocatePages(pages, CPUproc->memoryRequirement, &CPUproc->sizeOfFrames);
 
@@ -213,7 +212,8 @@ void pagedMemoryRR(ProcessQueue* processQ, int* pages, Process* processes, int p
             if (CPUproc->PmemoryAllocation[0] == NOT_ALLOCATED) {
                     while(CPUproc->PmemoryAllocation[0] == NOT_ALLOCATED){
                         evictLRU(processCount,processes,pages,time);
-                        CPUproc->PmemoryAllocation = allocatePages(pages, CPUproc->memoryRequirement, &CPUproc->sizeOfFrames);
+                        CPUproc->PmemoryAllocation = allocatePages(pages, CPUproc->memoryRequirement, 
+                                                                    &CPUproc->sizeOfFrames);
                     }
             }
         }
@@ -244,8 +244,8 @@ void pagedMemoryRR(ProcessQueue* processQ, int* pages, Process* processes, int p
                     printf(",");
                 }
             }
-            printf("]\n");
 
+            printf("]\n");
         }
 
         /* a CONTINUE call indicates that update() allowed the current CPUproc to run for a quantum.
@@ -273,7 +273,7 @@ void pagedMemoryRR(ProcessQueue* processQ, int* pages, Process* processes, int p
                 printf("%d,FINISHED,process-name=%s,proc-remaining=%d\n", time, sendBack->processName, remaining);
                 sendBack->completionTime = time;
         
-                /* continue as idlle if no other processes are queued*/
+                /* continue as idle if no other processes are queued*/
                 if (remaining == 0) {
                     break;
                 }
@@ -300,11 +300,11 @@ void pagedMemoryRR(ProcessQueue* processQ, int* pages, Process* processes, int p
                 if (CPUproc->PmemoryAllocation[0] == NOT_ALLOCATED) {
                     while(CPUproc->PmemoryAllocation[0] == NOT_ALLOCATED){
                         evictLRU(processCount,processes,pages,time);
-                        CPUproc->PmemoryAllocation = allocatePages(pages, CPUproc->memoryRequirement, &CPUproc->sizeOfFrames);
+                        CPUproc->PmemoryAllocation = allocatePages(pages, CPUproc->memoryRequirement, 
+                                                                    &CPUproc->sizeOfFrames);
                     }
-               
+                }
             }
-        }
 
             /* This update call will only be done IF a new process is now in the CPU
                 or the current process is allowed to continue, given no other ready processes, 
@@ -330,11 +330,9 @@ void pagedMemoryRR(ProcessQueue* processQ, int* pages, Process* processes, int p
                     }
                 }
                 printf("]\n");
-            
             }
         }    
     }
-    
     free(pages);
 }
 
@@ -607,22 +605,19 @@ int* allocatePages(int* memory, int memoryRequirement, int* frameSize) {
     return frames;
 }
 
-/* Allocation of a contiguous memory block;
-    memory is treated as an integer array of size 2048 KB and each element is 1KB of memory,
+/* Allocation of memory;
+    memory is treated as an integer array of size 2048 KB 512KB and each element is 1KB of memory,
+    OR integer array of size 512KB,
     where 0 indicates a free spot and 1 indicates an allocated space
 */
-int* createMemory( ) {
-    int* memory = (int*) calloc(MEMORY_CAPACITY, sizeof(int));
-    if (memory == NULL) {
-        fprintf(stderr, "Failed to allocate memory block\n");
-        exit(EXIT_FAILURE);
+int* createMemory(char memoryStrategy[]) {
+    int memorySize = 0;
+    if(strcmp(memoryStrategy, FIRST_FIT) == 0){
+        memorySize = MEMORY_CAPACITY;
+    } else{
+        memorySize = NUM_PAGES;
     }
-    return memory;
-}
-
-// Merge with createMemory later
-int* createPages(){
-    int* memory = (int*) calloc(NUM_PAGES, sizeof(int));
+    int* memory = (int*) calloc(memorySize, sizeof(int));
     if (memory == NULL) {
         fprintf(stderr, "Failed to allocate memory block\n");
         exit(EXIT_FAILURE);
