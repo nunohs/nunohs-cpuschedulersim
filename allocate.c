@@ -519,6 +519,7 @@ void deallocatePages(int* memory, int* frameSize, int* frames){
         memory[free_page_number] = FREE;
         frames[i] = NOT_ALLOCATED;
     }
+    
 }
 
 /* Allocate a contiguous block of memory for a process
@@ -561,7 +562,7 @@ int* allocatePages(int* memory, int memoryRequirement, int* frameSize) {
     }
 
     *frameSize = pagesRequired;
-    int* frames = (int*) malloc(pagesRequired * sizeof(int));
+    int* frames = (int*) calloc(pagesRequired, sizeof(int));
     if (frames == NULL) {
         fprintf(stderr, "Failed to allocate memory block\n");
         exit(EXIT_FAILURE);
