@@ -335,7 +335,7 @@ void pagedMemoryRR(ProcessQueue* processQ, int* pages, Process* processes, int p
         }    
     }
     
-    
+    free(pages);
 }
 
 /* Round-Robin Scheduling with First-Fit Memory Allocation
@@ -611,7 +611,7 @@ int* allocatePages(int* memory, int memoryRequirement, int* frameSize) {
     memory is treated as an integer array of size 2048 KB and each element is 1KB of memory,
     where 0 indicates a free spot and 1 indicates an allocated space
 */
-int* createMemory() {
+int* createMemory( ) {
     int* memory = (int*) calloc(MEMORY_CAPACITY, sizeof(int));
     if (memory == NULL) {
         fprintf(stderr, "Failed to allocate memory block\n");
