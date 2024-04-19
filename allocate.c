@@ -519,7 +519,8 @@ void deallocatePages(int* memory, int* frameSize, int* frames){
         memory[free_page_number] = FREE;
         frames[i] = NOT_ALLOCATED;
     }
-    
+    free(frames);
+    frames = NULL;
 }
 
 /* Allocate a contiguous block of memory for a process
