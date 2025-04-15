@@ -8,25 +8,25 @@ First-Fit Memory Allocation: Allocates the first available contiguous memory blo
 Paged Memory Allocation: Divides memory into fixed-size frames with page replacement
 
 ## Features
-## CPU Scheduling
+### CPU Scheduling
 
 Round Robin Algorithm: Processes execute for a fixed time quantum before potential preemption
 Process States: Manages processes through READY, RUNNING, and FINISHED states
 Dynamic Queue Management: Handles process arrivals and execution based on simulation time
 
-## Memory Management
+### Memory Management
 
 First-Fit Allocation: Implements contiguous memory allocation with the first-fit strategy
 Paged Memory: Divides memory into fixed-size pages and frames
 LRU Page Replacement: Evicts pages from least recently used processes when memory is full
 
-## Performance Metrics
+### Performance Metrics
 
 Turnaround Time: Average time from arrival to completion
 Time Overhead: Ratio of turnaround time to service time (maximum and average)
 Makespan: Total time to complete all processes
 
-## How It Works
+### How It Works
 
 Processes are defined with arrival time, name, service time, and memory requirements
 The simulator reads processes from an input file
@@ -34,7 +34,7 @@ Based on the chosen memory strategy, processes are allocated memory and schedule
 The simulator outputs detailed execution logs showing state changes and memory allocation
 Final performance metrics are calculated and displayed
 
-## Usage
+### Usage
 bash./scheduler -f <process_file> -m <memory_strategy> -q <quantum>
 Arguments:
 
@@ -42,7 +42,7 @@ Arguments:
 -m: Memory allocation strategy (infinite, first-fit, paged)
 -q: Time quantum for Round Robin scheduling (e.g., 1, 2, 3)
 
-## Input File Format
+### Input File Format
 Each line in the input file represents a process with the following format:
 <arrival_time> <process_name> <service_time> <memory_requirement>
 Example:
@@ -57,7 +57,7 @@ Memory allocation details
 Page evictions (for paged memory)
 Final performance statistics
 
-## Technical Implementation
+### Technical Implementation
 The implementation features dynamic memory management, linked list queue structures, and modular code organization that clearly separates the different scheduling and memory allocation strategies.
 Learning Value
 This project demonstrates key operating system concepts:
