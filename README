@@ -1,4 +1,4 @@
-CPU Scheduler Simulator
+**CPU Scheduler Simulator
 A comprehensive simulator for CPU scheduling and memory allocation, demonstrating core operating system concepts through practical implementation.
 Project Overview
 This simulator models how operating systems manage processes and allocate memory resources. It implements Round Robin CPU scheduling with three different memory management strategies:
