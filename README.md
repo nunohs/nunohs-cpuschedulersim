@@ -1,6 +1,6 @@
 # CPU Scheduler Simulator
 A comprehensive simulator for CPU scheduling and memory allocation, demonstrating core operating system concepts through practical implementation.
-Project Overview
+## Project Overview
 This simulator models how operating systems manage processes and allocate memory resources. It implements Round Robin CPU scheduling with three different memory management strategies:
 
 Infinite Memory: Simulates an environment with no memory constraints
@@ -49,7 +49,7 @@ Example:
 0 P1 5 128
 2 P2 3 256
 4 P3 8 192
-Output
+### Output
 The simulator provides detailed logs showing:
 
 Process state changes (READY → RUNNING → FINISHED)
@@ -59,16 +59,6 @@ Final performance statistics
 
 ### Technical Implementation
 The implementation features dynamic memory management, linked list queue structures, and modular code organization that clearly separates the different scheduling and memory allocation strategies.
-Learning Value
-This project demonstrates key operating system concepts:
-
-Process scheduling algorithms
-Memory allocation strategies
-Resource management
-Performance optimization
-
-It provides practical insights into how modern operating systems balance process execution with limited resources to maximize efficiency.
-
 
 ## Test Cases
 ./allocate -f cases/task1/spec.txt -q 1 -m infinite | diff - cases/task1/spec-q1.out
